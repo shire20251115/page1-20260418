@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>跨境物流成本测算</title>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #1f2937;
+      background-color: #f8fafc;
+      min-height: 100vh;
+    }
+
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+
+    select {
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+      background-position: right 0.5rem center;
+      background-repeat: no-repeat;
+      background-size: 1em 1em;
+      padding-right: 1.75rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const { createApp, ref, computed, reactive } = Vue
+
+    createApp({
+      setup() {
+        const exchangeRates = reactive({
+          usdToCny: { value: 7, label: 'USD/CNY' },
+          eurToCny: { value: 8, label: 'EUR/CNY' },
+          gbpToCny: { value: 9, label: 'GBP/CNY' }
+        })
+
+        const container = reactive({
+          chargeableWeight: { value: 14000, unit: 'KG' },
+          pieces: { value: 800, unit: '件' },
+          volume: { value: 70, unit: 'CBM' }
+        })
+
+        const warehouse = reactive({
+          packing: { value: 1000, currency: 'CNY', label: '装箱费' },
+          trucking: { value: 1000, currency: 'CNY', label: '拖车' }
+        })
+
+        const trunkTransport = reactive({
+          seaFreight: { value: 2600, currency: 'USD', label: '运费' },
+          other: { value: 2600, currency: 'CNY', label: '其他' }
+        })
+
+        const customs = reactive({
+          clearance: { value: 6000, currency: 'EUR', label: '清关费' },
+          other: { value: 200, currency: 'EUR', label: '其他' }
+        })
+
+        const destination = ref('DE')
+        const deliveryCost = ref(5)
+        const deliveryCurrency = ref('EUR')
+        const customWeight = ref(5)
+
+        const weightSegments = [5, 10, 12, 15, 20, 25]
+
+        const countryOptions = [
+          { value: 'AT', label: '奥地利', region: 'EU' },
+          { value: 'BE', label: '比利时', region: 'EU' },
+          { value: 'BG', label: '保加利亚', region: 'EU' },
+          { value: 'CY', label: '塞浦路斯', region: 'EU' },
+          { value: 'CZ', label: '捷克', region: 'EU' },
+          { value: 'DE', label: '德国', region: 'EU' },
+          { value: 'DK', label: '丹麦', region: 'EU' },
+          { value: 'EE', label: '爱沙尼亚', region: 'EU' },
+          { value: 'ES', label: '西班牙', region: 'EU' },
+          { value: 'FI', label: '芬兰', region: 'EU' },
+          { value: 'FR', label: '法国', region: 'EU' },
+          { value: 'GR', label: '希腊', region: 'EU' },
+          { value: 'HR', label: '克罗地亚', region: 'EU' },
+          { value: 'HU', label: '匈牙利', region: 'EU' },
+          { value: 'IE', label: '爱尔兰', region: 'EU' },
+          { value: 'IT', label: '意大利', region: 'EU' },
+          { value: 'LT', label: '立陶宛', region: 'EU' },
+          { value: 'LU', label: '卢森堡', region: 'EU' },
+          { value: 'LV', label: '拉脱维亚', region: 'EU' },
+          { value: 'MT', label: '马耳他', region: 'EU' },
+          { value: 'NL', label: '荷兰', region: 'EU' },
+          { value: 'PL', label: '波兰', region: 'EU' },
+          { value: 'PT', label: '葡萄牙', region: 'EU' },
+          { value: 'RO', label: '罗马尼亚', region: 'EU' },
+          { value: 'SE', label: '瑞典', region: 'EU' },
+          { value: 'SI', label: '斯洛文尼亚', region: 'EU' },
+          { value: 'SK', label: '斯洛伐克', region: 'EU' },
+          { value: 'UK', label: '英国', region: 'UK' }
+        ]
+
+        const currencyOptions = [
+          { value: 'CNY', label: '人民币' },
+          { value: 'USD', label: '美元' },
+          { value: 'EUR', label: '欧元' },
+          { value: 'GBP', label: '英镑' }
+        ]
+
+        const convertToCny = (amount, currency) => {
+          if (!amount || amount <= 0) return 0
+          switch (currency) {
+            case 'USD':
+              return amount * exchangeRates.usdToCny.value
+            case 'EUR':
+              return amount * exchangeRates.eurToCny.value
+            case 'GBP':
+              return amount * exchangeRates.gbpToCny.value
+            default:
+              return amount
+          }
+        }
+
+        const warehouseItems = computed(() => Object.values(warehouse))
+        const trunkItems = computed(() => Object.values(trunkTransport))
+        const customsItems = computed(() => Object.values(customs))
+
+        const totalHeadCostCNY = computed(() => {
+          const warehouseTotal = warehouseItems.value.reduce((sum, item) => sum + convertToCny(item.value, item.currency), 0)
+          const trunkTotal = trunkItems.value.reduce((sum, item) => sum + convertToCny(item.value, item.currency), 0)
+          const customsTotal = customsItems.value.reduce((sum, item) => sum + convertToCny(item.value, item.currency), 0)
+          return warehouseTotal + trunkTotal + customsTotal
+        })
+
+        const deliveryPriceCNY = computed(() => {
+          return convertToCny(deliveryCost.value, deliveryCurrency.value)
+        })
+
+        const avgCostPerKgHead = computed(() => {
+          if (container.chargeableWeight.value <= 0) return 0
+          return totalHeadCostCNY.value / container.chargeableWeight.value
+        })
+
+        const deliveryCostPerKgBySegment = computed(() => {
+          return weightSegments.map(w => ({
+            weight: w,
+            costPerKg: deliveryPriceCNY.value / w,
+            totalCostPerKg: avgCostPerKgHead.value + (deliveryPriceCNY.value / w)
+          }))
+        })
+
+        const customDeliveryCostPerKg = computed(() => {
+          if (customWeight.value <= 0) return 0
+          return deliveryPriceCNY.value / customWeight.value
+        })
+
+        const customTotalCostPerKg = computed(() => {
+          return avgCostPerKgHead.value + customDeliveryCostPerKg.value
+        })
+
+        const formatCurrency = (value) => {
+          return new Intl.NumberFormat('zh-CN', {
+            style: 'currency',
+            currency: 'CNY',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          }).format(value)
+        }
+
+        return {
+          exchangeRates,
+          container,
+          warehouseItems,
+          trunkItems,
+          customsItems,
+          destination,
+          deliveryCost,
+          deliveryCurrency,
+          customWeight,
+          weightSegments,
+          countryOptions,
+          currencyOptions,
+          totalHeadCostCNY,
+          deliveryPriceCNY,
+          deliveryCostPerKgBySegment,
+          customDeliveryCostPerKg,
+          customTotalCostPerKg,
+          formatCurrency,
+          convertToCny
+        }
+      },
+      template: `
+        <div class="min-h-screen bg-gradient-to-b from-white via-gray-50 to-white">
+          <header class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100">
+            <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <span class="text-white text-base">📦</span>
+                </div>
+                <span class="text-base font-semibold text-gray-900">Logistics</span>
+              </div>
+              <nav class="hidden md:flex items-center gap-6">
+                <a href="#rates" class="text-xs text-gray-600 hover:text-gray-900 transition-colors">汇率设置</a>
+                <a href="#costs" class="text-xs text-gray-600 hover:text-gray-900 transition-colors">费用明细</a>
+                <a href="#delivery" class="text-xs text-gray-600 hover:text-gray-900 transition-colors">派送设置</a>
+                <a href="#analysis" class="text-xs text-gray-600 hover:text-gray-900 transition-colors">成本分析</a>
+              </nav>
+            </div>
+          </header>
+
+          <section class="pt-16 pb-10 px-4">
+            <div class="max-w-4xl mx-auto text-center">
+              <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full mb-4">
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                <span class="text-xs text-gray-600">智能成本测算</span>
+              </div>
+              <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 leading-tight">
+                跨境物流
+                <span class="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">成本测算</span>
+              </h1>
+              <p class="text-sm text-gray-500 max-w-xl mx-auto mb-7">
+                输入头程和尾程成本，智能计算单公斤成本，助您优化物流方案
+              </p>
+              <div class="inline-flex flex-col sm:flex-row gap-3">
+                <a href="#rates" class="inline-flex items-center justify-center px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-all hover:scale-102 active:scale-98">
+                  开始测算
+                </a>
+                <a href="#analysis" class="inline-flex items-center justify-center px-6 py-2.5 border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all">
+                  查看分析
+                </a>
+              </div>
+            </div>
+          </section>
+
+          <div class="max-w-4xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 transition-transform hover:scale-[1.01]">
+                <div class="flex items-center mb-4">
+                  <div class="text-left mb-8">
+                    <h2 class="text-lg sm:text-xl font-bold text-gray-900 mb-2">汇率设置</h2>
+                    <p class="text-xs text-gray-500">实时汇率转换，支持多种货币</p>
+                  </div>
+                </div>
+                <div class="space-y-3">
+                  <div v-for="(rate, key) in exchangeRates" :key="key" class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">{{ rate.label }}</span>
+                    <div class="flex items-center">
+                      <span class="text-xs text-gray-400 mr-2">1 =</span>
+                      <input 
+                        v-model.number="rate.value" 
+                        type="number" 
+                        step="0.01"
+                        class="w-20 px-2 py-1.5 bg-gray-50 border-0 rounded-lg text-right text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                      >
+                      <span class="text-xs text-gray-400 ml-2">CNY</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 transition-transform hover:scale-[1.01]">
+                <div class="flex items-center mb-4">
+                  <div class="text-left mb-8">
+                    <h2 class="text-lg sm:text-xl font-bold text-gray-900 mb-2">集装箱信息</h2>
+                    <p class="text-xs text-gray-500">基础数据配置</p>
+                  </div>
+                </div>
+                
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">计费重量（KG）</span>
+                    <input 
+                      v-model.number="container.chargeableWeight.value" 
+                      type="number" 
+                      class="w-20 px-2 py-1.5 bg-gray-50 border-0 rounded-lg text-right text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all"
+                    >
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">总件数</span>
+                    <input 
+                      v-model.number="container.pieces.value" 
+                      type="number" 
+                      class="w-20 px-2 py-1.5 bg-gray-50 border-0 rounded-lg text-right text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all"
+                    >
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">体积（CBM）</span>
+                    <input 
+                      v-model.number="container.volume.value" 
+                      type="number" 
+                      step="0.1"
+                      class="w-20 px-2 py-1.5 bg-gray-50 border-0 rounded-lg text-right text-sm font-medium focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all"
+                    >
+                  </div>
+                </div>
+              </div>
+              
+            </div>
+          </div>
+
+          <section id="costs" class="py-8 px-4">
+            <div class="max-w-5xl mx-auto">
+              <div class="text-center mb-8">
+                <h2 class="text-lg sm:text-xl font-bold text-gray-900 mb-2">费用项目明细</h2>
+                <p class="text-xs text-gray-500">头程费用明细，四列平均分配</p>
+              </div>
+              <div class="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3">
+                  <span class="text-xs font-semibold text-gray-700">仓库费用</span>
+                </div>
+                <div class="divide-y divide-gray-50">
+                  <div v-for="(item, index) in warehouseItems" :key="'warehouse-' + index" class="px-4 py-3">
+                    <div class="grid grid-cols-[repeat(4,1fr)] gap-2 items-center">
+                      <span class="text-xs text-gray-600 sm:text-center">{{ item.label }}</span>
+                      <input v-model.number="item.value" type="number" step="0.01"
+                        class="w-full px-2 py-1.5 bg-gray-50 border-0 rounded-md text-center text-sm font-medium focus:outline-none focus:ring-1.5 focus:ring-purple-400 transition-all"
+                      />
+                      <select v-model="item.currency"
+                        class="w-full px-2 py-1.5 bg-gray-50 border-0 rounded-md text-center text-xs font-medium focus:outline-none focus:ring-1.5 focus:ring-purple-400 transition-all appearance-none"
+                      >
+                        <option v-for="curr in currencyOptions" :key="curr.value" :value="curr.value">{{ curr.value }}</option>
+                      </select>
+                      <span class="text-sm font-semibold text-gray-900 sm:text-center">{{ formatCurrency(convertToCny(item.value, item.currency)) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3">
+                  <span class="text-xs font-semibold text-gray-700">干线运输</span>
+                </div>
+                <div class="divide-y divide-gray-50">
+                  <div v-for="(item, index) in trunkItems" :key="'trunk-' + index" class="px-4 py-3">
+                    <div class="grid grid-cols-[repeat(4,1fr)] gap-2 items-center">
+                      <span class="text-xs text-gray-600 sm:text-center">{{ item.label }}</span>
+                      <input v-model.number="item.value" type="number" step="0.01"
+                        class="w-full px-2 py-1.5 bg-gray-50 border-0 rounded-md text-center text-sm font-medium focus:outline-none focus:ring-1.5 focus:ring-purple-400 transition-all"
+                      />
+                      <select v-model="item.currency"
+                        class="w-full px-2 py-1.5 bg-gray-50 border-0 rounded-md text-center text-xs font-medium focus:outline-none focus:ring-1.5 focus:ring-purple-400 transition-all appearance-none"
+                      >
+                        <option v-for="curr in currencyOptions" :key="curr.value" :value="curr.value">{{ curr.value }}</option>
+                      </select>
+                      <span class="text-sm font-semibold text-gray-900 sm:text-center">{{ formatCurrency(convertToCny(item.value, item.currency)) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3">
+                  <span class="text-xs font-semibold text-gray-700">目的港清关转运</span>
+                </div>
+                <div class="divide-y divide-gray-50">
+                  <div v-for="(item, index) in customsItems" :key="'customs-' + index" class="px-4 py-3">
+                    <div class="grid grid-cols-[repeat(4,1fr)] gap-2 items-center">
+                      <span class="text-xs text-gray-600 sm:text-center">{{ item.label }}</span>
+                      <input v-model.number="item.value" type="number" step="0.01"
+                        class="w-full px-2 py-1.5 bg-gray-50 border-0 rounded-md text-center text-sm font-medium focus:outline-none focus:ring-1.5 focus:ring-purple-400 transition-all"
+                      />
+                      <select v-model="item.currency"
+                        class="w-full px-2 py-1.5 bg-gray-50 border-0 rounded-md text-center text-xs font-medium focus:outline-none focus:ring-1.5 focus:ring-purple-400 transition-all appearance-none"
+                      >
+                        <option v-for="curr in currencyOptions" :key="curr.value" :value="curr.value">{{ curr.value }}</option>
+                      </select>
+                      <span class="text-sm font-semibold text-gray-900 sm:text-center">{{ formatCurrency(convertToCny(item.value, item.currency)) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="bg-gradient-to-r from-indigo-50 to-purple-50 px-4 py-3.5">
+                  <div class="grid grid-cols-2 sm:grid-cols-[repeat(4,1fr)] items-center">
+                    <span class="text-sm font-semibold text-gray-700">费用合计</span>
+                    <span class="text-lg font-bold text-indigo-600 text-right col-span-3">{{ formatCurrency(totalHeadCostCNY) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="delivery" class="py-8 px-4 bg-gray-50">
+            <div class="max-w-5xl mx-auto">
+              <div class="text-center mb-8">
+                <h2 class="text-lg sm:text-xl font-bold text-gray-900 mb-2">末端派送设置</h2>
+                <p class="text-xs text-gray-500">尾程费用配置</p>
+              </div>
+              <div class="bg-white rounded-xl p-5 border border-gray-100">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5">目的国家</label>
+                    <select v-model="destination"
+                      class="w-full px-3 py-2 bg-gray-50 border-0 rounded-lg text-xs font-medium focus:outline-none focus:ring-1.5 focus:ring-emerald-400 transition-all appearance-none"
+                    >
+                      <optgroup label="欧盟">
+                        <option v-for="country in countryOptions.filter(c => c.region === 'EU')" :key="country.value" :value="country.value">{{ country.label }}</option>
+                      </optgroup>
+                      <optgroup label="英国">
+                        <option v-for="country in countryOptions.filter(c => c.region === 'UK')" :key="country.value" :value="country.value">{{ country.label }}</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5">单个包裹成本</label>
+                    <input v-model.number="deliveryCost" type="number" step="0.01"
+                      class="w-full px-3 py-2 bg-gray-50 border-0 rounded-lg text-right text-sm font-medium focus:outline-none focus:ring-1.5 focus:ring-emerald-400 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5">币种</label>
+                    <select v-model="deliveryCurrency"
+                      class="w-full px-3 py-2 bg-gray-50 border-0 rounded-lg text-xs font-medium focus:outline-none focus:ring-1.5 focus:ring-emerald-400 transition-all appearance-none"
+                    >
+                      <option v-for="curr in currencyOptions" :key="curr.value" :value="curr.value">{{ curr.value }}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1.5">人民币费用</label>
+                    <div class="w-full px-3 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg text-right font-bold text-emerald-600 text-sm">
+                      {{ formatCurrency(deliveryPriceCNY) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="analysis" class="py-8 px-4">
+            <div class="max-w-5xl mx-auto">
+              <div class="text-center mb-8">
+                <h2 class="text-lg sm:text-xl font-bold text-gray-900 mb-2">成本分析</h2>
+                <p class="text-xs text-gray-500">自定义重量计算与重量段参考</p>
+              </div>
+
+              <div class="bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-700 rounded-2xl p-5 mb-8 text-white">
+                <div class="text-center mb-5">
+                  <h3 class="text-base sm:text-lg font-bold mb-1">自定义重量计算</h3>
+                  <p class="text-xs text-white/70">输入单个包裹重量，获取精确成本分析</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                  <div class="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+                    <label class="block text-xs font-medium text-white/80 mb-1.5">单个包裹重量</label>
+                    <div class="flex items-center gap-2">
+                      <input v-model.number="customWeight" type="number" min="0.1" step="0.1"
+                        class="flex-1 px-3 py-2 bg-white border-0 rounded-lg text-center text-lg font-bold text-gray-900 focus:outline-none focus:ring-1.5 focus:ring-white/50 transition-all"
+                      />
+                      <span class="text-xs text-white/70">KG</span>
+                    </div>
+                  </div>
+                  <div class="flex items-end">
+                    <button class="w-full px-5 py-2 bg-white text-indigo-600 font-bold rounded-xl hover:bg-gray-50 transition-all hover:scale-102 active:scale-98">
+                      计算分析
+                    </button>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div class="bg-white rounded-xl p-4 text-gray-900">
+                    <div class="text-xs text-gray-500 mb-1">单公斤派送费</div>
+                    <div class="text-xl font-bold text-emerald-600">{{ formatCurrency(customDeliveryCostPerKg) }}</div>
+                  </div>
+                  <div class="bg-white rounded-xl p-4 text-gray-900">
+                    <div class="text-xs text-gray-500 mb-1">单公斤平均总成本</div>
+                    <div class="text-xl font-bold text-indigo-600">{{ formatCurrency(customTotalCostPerKg) }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-100">
+                  <span class="text-sm font-semibold text-gray-900">重量段参考</span>
+                </div>
+                <div class="p-4">
+                  <div class="mb-4">
+                    <h4 class="text-xs font-medium text-gray-500 mb-3">派送费/KG</h4>
+                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      <div v-for="segment in deliveryCostPerKgBySegment" :key="segment.weight"
+                        :class="['rounded-lg p-3 text-center transition-all cursor-pointer', segment.weight === customWeight ? 'bg-emerald-50 border-2 border-emerald-400' : 'bg-gray-50 hover:bg-gray-100']"
+                        @click="customWeight = segment.weight"
+                      >
+                        <div class="text-xs font-medium text-gray-600">{{ segment.weight }}KG</div>
+                        <div class="text-sm font-bold text-emerald-600">{{ formatCurrency(segment.costPerKg) }}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4">
+                    <h4 class="text-xs font-medium text-gray-500 mb-3">平均总成本/KG</h4>
+                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      <div v-for="segment in deliveryCostPerKgBySegment" :key="segment.weight"
+                        :class="['rounded-lg p-3 text-center transition-all cursor-pointer', segment.weight === customWeight ? 'bg-white border-2 border-indigo-400 shadow-sm' : 'bg-white/60 hover:bg-white']"
+                        @click="customWeight = segment.weight"
+                      >
+                        <div class="text-xs font-medium text-gray-600">{{ segment.weight }}KG</div>
+                        <div class="text-sm font-bold text-indigo-600">{{ formatCurrency(segment.totalCostPerKg) }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <footer class="py-8 px-4 border-t border-gray-100">
+            <div class="max-w-5xl mx-auto text-center">
+              <div class="flex items-center justify-center gap-2.5 mb-3">
+                <div class="w-7 h-7 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                  <span class="text-white text-sm">📦</span>
+                </div>
+                <span class="text-sm font-semibold text-gray-900">Logistics</span>
+              </div>
+              <p class="text-xs text-gray-500">© 2026 跨境物流成本测算系统</p>
+            </div>
+          </footer>
+        </div>
+      `
+    }).mount('#app')
+  </script>
+</body>
+</html>
